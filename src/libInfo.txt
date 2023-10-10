@@ -1,0 +1,1 @@
+Em esp32_https_server-1.0.0\src/HTTPConnection.hpp alterar #include <hwcrypto/sha.h> por #include <sha/sha_parallel_engine.h>
