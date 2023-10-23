@@ -30,6 +30,14 @@ typedef struct {
     bool finalizado = true;
 } irStruct;
 
+typedef struct {
+    uint32_t data;
+    uint32_t bitLength;
+    uint32_t protocol;
+    bool iniciado = true;
+    bool finalizado = true;
+} rfStruct;
+
 using namespace httpsserver;
 
 const uint16_t kIrLedPin = 4;  // Pino D2
@@ -50,6 +58,9 @@ IRrecv irrecv(kRecvPin, kCaptureBufferSize, kTimeout, false);
 
 irStruct irReceiverData;
 irStruct irEmitterData;
+
+rfStruct rfReceiverData;
+rfStruct rfEmitterData;
 
 SSLCert* cert;
 HTTPSServer* secureServer;
@@ -106,34 +117,6 @@ void setup() {
     Serial.print("Connected. IP=");
     Serial.println(WiFi.localIP());
 
-    // ResourceNode* nodeRoot = new ResourceNode("/", "GET", &handleRoot);
-    // ResourceNode* node404 = new ResourceNode("", "GET", &handle404);
-
-    // ResourceNode* nodeIREmit = new ResourceNode("/ir-emitter", "POST", &iREmit);
-    // ResourceNode* nodeIRSave = new ResourceNode("/ir-save", "POST", &iRSave);
-    // ResourceNode* nodeIRSaveComplete = new ResourceNode("/ir-save", "GET", &iRSaveComplete);
-
-    // ResourceNode* nodeRFEmit = new ResourceNode("/rf-emitter", "GET", &iRSave);
-    // ResourceNode* nodeRFSave = new ResourceNode("/rf-save", "POST", &iRSave);
-    // ResourceNode* nodeRFSaveComplete = new ResourceNode("/rf-save", "GET", &iRSave);
-
-    // secureServer->registerNode(nodeRoot);
-    // secureServer->setDefaultNode(node404);
-
-    // secureServer->registerNode(nodeIREmit);
-    // secureServer->registerNode(nodeIRSave);
-    // secureServer->registerNode(nodeIRSaveComplete);
-
-    // secureServer->registerNode(nodeRFEmit);
-    // secureServer->registerNode(nodeRFSave);
-    // secureServer->registerNode(nodeRFSaveComplete);
-
-    // Serial.println("Starting server...");
-    // secureServer->start();
-    // if (secureServer->isRunning()) {
-    //     Serial.println("Server ready.");
-    // }
-
     // We pass:
     // serverTask - the function that should be run as separate task
     // "https443" - a name for the task (mainly used for logging)
@@ -145,7 +128,7 @@ void setup() {
 
     irrecv.enableIRIn();  // Start the IR receiver
     irsend.begin();       // Start up the IR sender.
-    mySwitch.enableReceive(0);  // Start RF receiver
+    mySwitch.enableReceive(18);  // Start RF receiver
 }
 
 void loop() {
@@ -205,6 +188,10 @@ void loop() {
             Serial.print("Protocol: ");
             Serial.println( mySwitch.getReceivedProtocol() );
 
+            rfReceiverData.data = mySwitch.getReceivedValue();
+            rfReceiverData.bitLength = mySwitch.getReceivedBitlength();
+            rfReceiverData.protocol = mySwitch.getReceivedProtocol();
+
             mySwitch.resetAvailable();
         }
     }
@@ -212,6 +199,7 @@ void loop() {
     if (!irEmitterData.iniciado && irReceiverData.finalizado) {
 
     }
+
 
     delay(1);
 }
@@ -367,6 +355,59 @@ void iRSaveComplete(HTTPRequest* req, HTTPResponse* res) {
 
     StaticJsonDocument<200> doc;
 
+    JsonObject object = doc.to<JsonObject>();
+    object["tipo"] = "IR";
+    object["data"] = uint64ToString(irReceiverData.results.value, HEX);
+    object["finalizado"] = irReceiverData.finalizado;
+
+    String resultString;
+    serializeJson(doc, resultString);
+    Serial.print(resultString);
+
+    res->setHeader("Content-Type", "application/json");
+    res->println(resultString);
+}
+
+void rFSave(HTTPRequest* req, HTTPResponse* res){
+
+    StaticJsonDocument<200> doc;
+    JsonObject object = doc.to<JsonObject>();
+    object["tipo"] = "IR";
+    object["data"] = uint64ToString(irReceiverData.results.value, HEX);
+    object["bitLenght"] = "";
+    object["protocol"] = "";
+    object["finalizado"] = irReceiverData.finalizado;
+
+
+    String resultString;
+    serializeJson(doc, resultString);
+    Serial.print(resultString);
+
+    res->setHeader("Content-Type", "application/json");
+    res->println(resultString);
+
+
+}
+
+void rFSaveComplete(HTTPRequest* req, HTTPResponse* res){
+
+    StaticJsonDocument<200> doc;
+    JsonObject object = doc.to<JsonObject>();
+    object["tipo"] = "IR";
+    object["data"] = uint64ToString(irReceiverData.results.value, HEX);
+    object["finalizado"] = irReceiverData.finalizado;
+
+    String resultString;
+    serializeJson(doc, resultString);
+    Serial.print(resultString);
+
+    res->setHeader("Content-Type", "application/json");
+    res->println(resultString);
+}
+
+void rFEmitter(HTTPRequest* req, HTTPResponse* res){
+
+    StaticJsonDocument<200> doc;
     JsonObject object = doc.to<JsonObject>();
     object["tipo"] = "IR";
     object["data"] = uint64ToString(irReceiverData.results.value, HEX);
