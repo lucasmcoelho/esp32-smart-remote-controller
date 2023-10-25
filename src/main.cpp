@@ -129,6 +129,7 @@ void setup() {
     irrecv.enableIRIn();  // Start the IR receiver
     irsend.begin();       // Start up the IR sender.
     mySwitch.enableReceive(18);  // Start RF receiver
+    mySwitch.enableTransmit(27); // Start RF transmitter
 }
 
 void loop() {
@@ -177,7 +178,7 @@ void loop() {
 
 
     //TODO CONTROLE RF
-    if (!irReceiverData.iniciado) {
+    if (!rfReceiverData.iniciado) {
         if (mySwitch.available()) {
             
             Serial.print("Received ");
@@ -196,7 +197,13 @@ void loop() {
         }
     }
 
-    if (!irEmitterData.iniciado && irReceiverData.finalizado) {
+    if (!rfEmitterData.iniciado && rfReceiverData.finalizado) {
+        mySwitch.setProtocol(1); // Default 1
+        mySwitch.setPulseLength(320);
+        mySwitch.setRepeatTransmit(15);
+
+        mySwitch.send(5396, 24);
+        delay(1000);  
 
     }
 
