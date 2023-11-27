@@ -1,0 +1,42 @@
+POST http://localhost:8080/ir-save HTTP/1.1
+content-type: application/json
+
+###
+GET http://localhost:8080/ir-save HTTP/1.1
+content-type: application/json
+
+
+
+###
+POST http://localhost:8080/ir-emitter HTTP/1.1
+content-type: application/json
+
+{
+	"tipo": "IR",
+	"data": 200526790,
+	"bitLength": 28,
+	"protocol": 6
+}
+
+
+
+
+
+###
+POST http://localhost:8080/rf-save HTTP/1.1
+content-type: application/json
+
+###
+GET http://localhost:8080/rf-save HTTP/1.1
+content-type: application/json
+
+###
+POST http://localhost:8080/rf-emitter HTTP/1.1
+content-type: application/json
+
+{
+	"tipo": "RF",
+	"data": 200526997,
+	"bitLength": 28,
+	"protocol": 6
+}
