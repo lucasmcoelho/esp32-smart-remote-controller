@@ -237,13 +237,11 @@ void loop() {
         // mySwitch.setRepeatTransmit(15);
         mySwitch.setProtocol(rfEmitterData.protocol);  // Default 1
         mySwitch.send(rfEmitterData.data, rfEmitterData.bitLength);
-
         rfEmitterData.finalizado = true;
         rfEmitterData.iniciado = true;
         Serial.println("RF EMITIDO");
     }
     // FIM ROTINAS RF
-
 
     delay(1);
     // yield();
