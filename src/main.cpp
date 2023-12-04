@@ -29,6 +29,8 @@
 #include <httpsCert.h>
 #include <pkServer.h>
 
+#define LED 2
+
 decode_results results;
 
 typedef struct {
@@ -92,6 +94,7 @@ void iRSave(HTTPRequest* req, HTTPResponse* res);
 void iRSaveComplete(HTTPRequest* req, HTTPResponse* res);
 
 void rFEmit(HTTPRequest* req, HTTPResponse* res);
+void rFEmitOptions(HTTPRequest* req, HTTPResponse* res);
 void rFSave(HTTPRequest* req, HTTPResponse* res);
 void rFSaveComplete(HTTPRequest* req, HTTPResponse* res);
 
@@ -104,23 +107,6 @@ void setup() {
     // TODO - CRIAR SELF SIGNED CERTIFICATE
     Serial.println("Criando Self-Signed Certificate");
     cert = new SSLCert(server_cert, KEYSIZE_2048, server_key, KEYSIZE_2048);
-
-    // // SELF SIGNED CERTIFICATE  ----TEMPORARIO----
-    // int createCertResult = createSelfSignedCert(
-    //     *cert,
-    //     KEYSIZE_2048,
-    //     "CN=esp32.local,O=FancyCompany,C=DE",
-    //     "20230101000000",  // YYYYMMDDhhmmss
-    //     "20250101000000"   // YYYYMMDDhhmmss
-    // );
-
-    // if (createCertResult != 0) {
-    //     Serial.printf("Erro ao criar certificado. Error Code = 0x%02X, check SSLCert.hpp for details", createCertResult);
-    //     while (true) delay(500);
-    // }
-    // Serial.println("Certificado criado");
-    // FIM SELF SIGNED CERTIFICATE
-
 
     Serial.println("Setting up WiFi");
     WiFi.begin(WIFI_SSID, WIFI_PSK);
@@ -147,12 +133,12 @@ void setup() {
     //              not go below 6kB. If your stack is too small, you will encounter
     //              Panic and stack canary exceptions, usually during the call to
     //              SSL_accept.
-    xTaskCreatePinnedToCore(serverTask, "https443", 6144 * 2, NULL, 1, NULL, ARDUINO_RUNNING_CORE);
+    xTaskCreatePinnedToCore(serverTask, "https443", 6144 * 1, NULL, 1, NULL, ARDUINO_RUNNING_CORE);
 
     irrecv.enableIRIn();          // Start the IR receiver
     irsend.begin();               // Start up the IR sender.
-    mySwitch.enableReceive(27);   // Start RF receiver
-    mySwitch.enableTransmit(18);  // Start RF transmitter
+    mySwitch.enableReceive(18);   // Start RF receiver
+    mySwitch.enableTransmit(27);  // Start RF transmitter
 }
 
 void loop() {
@@ -206,9 +192,18 @@ void loop() {
         } else if (hasACState(irEmitterData.protocol)) {
             irsend.send(irEmitterData.protocol, irEmitterData.irState, irEmitterData.bitLength / 8);
         } else {
-            Serial.println(irEmitterData.results.value);
-            Serial.println(results.value);
-            irsend.send(irEmitterData.results.decode_type, irEmitterData.results.value, irEmitterData.results.bits);
+            Serial.print("IREmitterData: ");
+            Serial.println(irEmitterData.data);
+            Serial.print("IREmitterData.protocol: ");
+            Serial.println(irEmitterData.protocol);
+            Serial.print("IREmitterData.Bits: ");
+            Serial.println(irEmitterData.bitLength);
+            boolean enviado = irsend.send(irEmitterData.results.decode_type, irEmitterData.results.value, irEmitterData.results.bits);
+            if(enviado){
+                Serial.println("Enviado");
+            } else{
+                Serial.println("Não Enviado");
+            }
         }
 
         irEmitterData.iniciado = true;
@@ -216,6 +211,7 @@ void loop() {
 
     }
 
+    //ROTINAS RF
     if (!rfReceiverData.iniciado && !rfReceiverData.finalizado) {
         if (mySwitch.available()) {
             Serial.print("Received ");
@@ -238,16 +234,19 @@ void loop() {
     }
 
     if (!rfEmitterData.iniciado && rfReceiverData.finalizado) {
-        mySwitch.setProtocol(rfEmitterData.protocol);  // Default 1
-        // mySwitch.setPulseLength(320);
         // mySwitch.setRepeatTransmit(15);
-
+        mySwitch.setProtocol(rfEmitterData.protocol);  // Default 1
         mySwitch.send(rfEmitterData.data, rfEmitterData.bitLength);
+
         rfEmitterData.finalizado = true;
         rfEmitterData.iniciado = true;
+        Serial.println("RF EMITIDO");
     }
+    // FIM ROTINAS RF
+
 
     delay(1);
+    // yield();
 }
 
 void serverTask(void* params) {
@@ -261,6 +260,7 @@ void serverTask(void* params) {
     ResourceNode* nodeIRSaveComplete = new ResourceNode("/ir-save", "GET", &iRSaveComplete);
 
     ResourceNode* nodeRFEmit = new ResourceNode("/rf-emitter", "POST", &rFEmit);
+    ResourceNode* nodeRFEmitOptions = new ResourceNode("/rf-emitter", "OPTIONS", &rFEmitOptions);
     ResourceNode* nodeRFSave = new ResourceNode("/rf-save", "POST", &rFSave);
     ResourceNode* nodeRFSaveComplete = new ResourceNode("/rf-save", "GET", &rFSaveComplete);
 
@@ -272,6 +272,7 @@ void serverTask(void* params) {
     secureServer->registerNode(nodeIRSaveComplete);
 
     secureServer->registerNode(nodeRFEmit);
+    secureServer->registerNode(nodeRFEmitOptions);
     secureServer->registerNode(nodeRFSave);
     secureServer->registerNode(nodeRFSaveComplete);
 
@@ -288,6 +289,9 @@ void serverTask(void* params) {
 }
 
 void handleRoot(HTTPRequest* req, HTTPResponse* res) {
+    res->setHeader("Content-Type", "application/json");
+    res->setHeader("Access-Control-Allow-Origin", "*");
+    res->setHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
     res->setHeader("Content-Type", "text/html");
 
     res->println("<!DOCTYPE html>");
@@ -308,6 +312,9 @@ void handle404(HTTPRequest* req, HTTPResponse* res) {
     res->setStatusCode(404);
     res->setStatusText("Not Found");
 
+    res->setHeader("Content-Type", "application/json");
+    res->setHeader("Access-Control-Allow-Origin", "*");
+    res->setHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
     res->setHeader("Content-Type", "text/html");
 
     res->println("<!DOCTYPE html>");
@@ -318,10 +325,6 @@ void handle404(HTTPRequest* req, HTTPResponse* res) {
 }
 
 void iREmit(HTTPRequest* req, HTTPResponse* res) {
-    if (irEmitterData.finalizado) {
-        irEmitterData.iniciado = false;
-        irEmitterData.finalizado = false;
-    }
 
     std::string contentType = req->getHeader("Content-Type");
     DynamicJsonDocument ddoc(1024);
@@ -334,11 +337,9 @@ void iREmit(HTTPRequest* req, HTTPResponse* res) {
         deserializeJson(ddoc, bodyBytes);
 
 
-        // irEmitterData.data = ddoc["data"];
-        // irEmitterData.bitLength = ddoc["bitLength"];
-        // irEmitterData.protocol = ddoc["protocol"];
-
-        //serializeJsonPretty(doc, Serial);
+        irEmitterData.data = ddoc["data"];
+        irEmitterData.bitLength = ddoc["bitLength"];
+        irEmitterData.protocol = ddoc["protocol"];
 
         // String rr = String((char*)bodyBytes);
 
@@ -348,6 +349,12 @@ void iREmit(HTTPRequest* req, HTTPResponse* res) {
         // for(int dd=0; dd<contentLength; dd++) {
         //     Serial.print(uint64ToString(bodyBytes[dd], HEX));
         // }
+
+
+        if (irEmitterData.finalizado) {
+            irEmitterData.iniciado = false;
+            irEmitterData.finalizado = false;
+        }
     }
 
     StaticJsonDocument<200> doc;
@@ -358,6 +365,9 @@ void iREmit(HTTPRequest* req, HTTPResponse* res) {
     String resultString;
     serializeJson(doc, resultString);
 
+    res->setHeader("Access-Control-Allow-Origin", "*");
+    res->setHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
+    res->setHeader("Access-Control-Allow-Headers", "Content-Type");
     res->setHeader("Content-Type", "application/json");
     res->println(resultString);
 }
@@ -381,6 +391,9 @@ void iRSave(HTTPRequest* req, HTTPResponse* res) {
     serializeJson(doc, resultString);
     Serial.print(resultString);
 
+    res->setHeader("Access-Control-Allow-Origin", "*");
+    res->setHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
+    res->setHeader("Access-Control-Allow-Headers", "Content-Type");
     res->setHeader("Content-Type", "application/json");
     res->println(resultString);
 }
@@ -393,8 +406,8 @@ void iRSaveComplete(HTTPRequest* req, HTTPResponse* res) {
 
     if(irReceiverData.finalizado){
         object["data"] = irReceiverData.data;
-        object["bitLength"] = rfReceiverData.bitLength;
-        object["protocol"] = rfReceiverData.protocol;
+        object["bitLength"] = irReceiverData.bitLength;
+        object["protocol"] = irReceiverData.protocol;
     } else{
         object["data"] = 0;
         object["bitLength"] = 0;
@@ -408,13 +421,18 @@ void iRSaveComplete(HTTPRequest* req, HTTPResponse* res) {
     serializeJson(doc, resultString);
     Serial.print(resultString);
 
+    res->setHeader("Access-Control-Allow-Origin", "*");
+    res->setHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
+    res->setHeader("Access-Control-Allow-Headers", "Content-Type");
     res->setHeader("Content-Type", "application/json");
     res->println(resultString);
 }
 
 void rFSave(HTTPRequest* req, HTTPResponse* res) {
-    if (rfReceiverData.finalizado) rfReceiverData.iniciado = false;
-    rfReceiverData.finalizado = false;
+    if (rfReceiverData.finalizado) {
+        rfReceiverData.iniciado = false; 
+        rfReceiverData.finalizado = false;
+    }
 
     StaticJsonDocument<200> doc;
     JsonObject object = doc.to<JsonObject>();
@@ -430,6 +448,9 @@ void rFSave(HTTPRequest* req, HTTPResponse* res) {
     serializeJson(doc, resultString);
 
     res->setHeader("Content-Type", "application/json");
+    res->setHeader("Access-Control-Allow-Origin", "*");
+    res->setHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
+    res->setHeader("Access-Control-Allow-Headers", "Content-Type");
     res->println(resultString);
 }
 
@@ -455,17 +476,14 @@ void rFSaveComplete(HTTPRequest* req, HTTPResponse* res) {
     serializeJson(doc, resultString);
     Serial.print(resultString);
 
+    res->setHeader("Access-Control-Allow-Origin", "*");
+    res->setHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
+    res->setHeader("Access-Control-Allow-Headers", "Content-Type");
     res->setHeader("Content-Type", "application/json");
     res->println(resultString);
 }
 
 void rFEmit(HTTPRequest* req, HTTPResponse* res) {
-    if (rfEmitterData.finalizado) {
-        rfEmitterData.iniciado = false;
-        rfEmitterData.finalizado = false;
-    }
-
-    
 
     std::string contentType = req->getHeader("Content-Type");
     DynamicJsonDocument ddoc(1024);
@@ -481,6 +499,11 @@ void rFEmit(HTTPRequest* req, HTTPResponse* res) {
             rfEmitterData.data = ddoc["data"];
             rfEmitterData.bitLength = ddoc["bitLength"];
             rfEmitterData.protocol = ddoc["protocol"];
+
+            if (rfEmitterData.finalizado) {
+                rfEmitterData.iniciado = false;
+                rfEmitterData.finalizado = false;
+            }
         }
     }
 
@@ -494,5 +517,17 @@ void rFEmit(HTTPRequest* req, HTTPResponse* res) {
     serializeJson(doc, resultString);
 
     res->setHeader("Content-Type", "application/json");
+    res->setHeader("Access-Control-Allow-Origin", "*");
+    res->setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+    res->setHeader("Access-Control-Allow-Headers", "Content-Type");
     res->println(resultString);
+}
+
+void rFEmitOptions(HTTPRequest* req, HTTPResponse* res) {
+
+    res->setHeader("Content-Type", "application/json");
+    res->setHeader("Access-Control-Allow-Origin", "*");
+    res->setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+    res->setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res->println("");
 }
