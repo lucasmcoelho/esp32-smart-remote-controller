@@ -10,6 +10,9 @@
 // #define WIFI_SSID "GVT-DB19"
 // #define WIFI_PSK "7607401559"
 
+// #define WIFI_SSID "House"
+// #define WIFI_PSK "1493454a"
+
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <IRrecv.h>
@@ -91,6 +94,7 @@ void handle404(HTTPRequest* req, HTTPResponse* res);
 
 void iREmit(HTTPRequest* req, HTTPResponse* res);
 void iRSave(HTTPRequest* req, HTTPResponse* res);
+void iREmitOptions(HTTPRequest* req, HTTPResponse* res);
 void iRSaveComplete(HTTPRequest* req, HTTPResponse* res);
 
 void rFEmit(HTTPRequest* req, HTTPResponse* res);
@@ -254,6 +258,7 @@ void serverTask(void* params) {
     ResourceNode* node404 = new ResourceNode("", "GET", &handle404);
 
     ResourceNode* nodeIREmit = new ResourceNode("/ir-emitter", "POST", &iREmit);
+    ResourceNode* nodeIREmitOptions = new ResourceNode("/ir-emitter", "OPTIONS", &iREmitOptions);
     ResourceNode* nodeIRSave = new ResourceNode("/ir-save", "POST", &iRSave);
     ResourceNode* nodeIRSaveComplete = new ResourceNode("/ir-save", "GET", &iRSaveComplete);
 
@@ -266,6 +271,7 @@ void serverTask(void* params) {
     secureServer->setDefaultNode(node404);
 
     secureServer->registerNode(nodeIREmit);
+    secureServer->registerNode(nodeIREmitOptions);
     secureServer->registerNode(nodeIRSave);
     secureServer->registerNode(nodeIRSaveComplete);
 
@@ -424,6 +430,15 @@ void iRSaveComplete(HTTPRequest* req, HTTPResponse* res) {
     res->setHeader("Access-Control-Allow-Headers", "Content-Type");
     res->setHeader("Content-Type", "application/json");
     res->println(resultString);
+}
+
+void iREmitOptions(HTTPRequest* req, HTTPResponse* res) {
+
+    res->setHeader("Content-Type", "application/json");
+    res->setHeader("Access-Control-Allow-Origin", "*");
+    res->setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
+    res->setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res->println("");
 }
 
 void rFSave(HTTPRequest* req, HTTPResponse* res) {
